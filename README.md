@@ -71,23 +71,17 @@ This strategy requires to access multiple shards in a single request based on th
      */
     interface ShardingConnection
     {
-        function getShardingStratety();
-
-        /**
-         * Set the shard id or shard distribution value depending on the implementation
-         * and all queries following this command will only be executed against the given shard.
-         * 
-         * @param mixed $value
-         * @return void
-         */
-        function setShard($value);
+        function getShardingManager();
     }
 
-    interface ShardingStrategy
+    interface ShardingManager
     {
+        function useShards(array $values);
+        function useShard($value);
+        function usetAllShards();
+        function getShards();
         function getQueryResolver();
         function getShardResolver();
-        function getShardIds(ShardingConnection $conn);
     }
 
     interface QueryResolver
