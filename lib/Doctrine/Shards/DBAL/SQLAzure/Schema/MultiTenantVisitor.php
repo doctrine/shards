@@ -33,7 +33,9 @@ use Doctrine\DBAL\Schema\Visitor\Visitor,
  * Federations under the following assumptions:
  *
  * - Every table is part of the multi-tenant application, only explicitly
- *   excluded tables are non-federated.
+ *   excluded tables are non-federated. The behavior of the tables being in
+ *   global or federated database is undefined. It depends on you selecting a
+ *   federation before DDL statements or not.
  * - Every Primary key of a federated table is extended by another column
  *   'tenant_id' with a default value of the SQLAzure function
  *   `federation_filtering_value('tenant_id')`.
@@ -42,7 +44,7 @@ use Doctrine\DBAL\Schema\Visitor\Visitor,
  * - Primary keys are either using globally unique ids (GUID, Table Generator)
  *   or you explicitly add the tenent_id in every UPDATE or DELETE statement
  *   (otherwise they will affect the same-id rows from other tenents as well).
- *   SQLAzure throws exception when IDENTIY columns are used on federated
+ *   SQLAzure throws errors when you try to create IDENTIY columns on federated
  *   tables.
  *
  * @author Benjamin Eberlei <kontakt@beberlei.de>
@@ -64,10 +66,19 @@ class MultiTenantVisitor implements Visitor
      */
     private $tenantColumnType = 'integer';
 
-    public function __construct(array $excludedTables = array(), $tenantColumnName = 'tenant_id')
+    /**
+     * Name of the federation distribution, defaulting to the tenantColumnName
+     * if not specified.
+     *
+     * @var string
+     */
+    private $distributionName;
+
+    public function __construct(array $excludedTables = array(), $tenantColumnName = 'tenant_id', $distributionName = null)
     {
         $this->excludedTables = $excludedTables;
         $this->tenantColumnName = $tenantColumnName;
+        $this->distributionName = $distributionName ?: $tenantColumnName;
     }
 
     /**
@@ -79,9 +90,8 @@ class MultiTenantVisitor implements Visitor
             return;
         }
 
-        // TODO: will only work with integer columns as of now.
         $table->addColumn($this->tenantColumnName, $this->tenantColumnType, array(
-            'default' => "federation_filtering_value('". $this->tenantColumnName ."')",
+            'default' => "federation_filtering_value('". $this->distributionName ."')",
         ));
 
         $clusteredIndex = $this->getClusteredIndex($table);
@@ -94,7 +104,8 @@ class MultiTenantVisitor implements Visitor
             $table->setPrimaryKey($indexColumns);
         } else {
             $table->dropIndex($clusteredIndex->getName());
-            $table->addIndex($indexColumns);
+            $table->addIndex($indexColumns, $clusteredIndex->getName());
+            $table->getIndex($clusteredIndex->getName())->addFlag('clustered');
         }
     }
 

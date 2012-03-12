@@ -22,6 +22,14 @@ Implementing Federations inside a new Doctrine Sharding Extension. Some extensio
 * Extend ID Generation layer
 * Implement API that allow users to choose the shard target for any given query
 
+## Implementation Details
+
+SQL Azure requires one and exactly one clustered index. It makes no difference if the primary key
+or any other key is the clustered index. Sharding requires an external ID generation (no auto-increment)
+such as GUIDs. GUIDs have negative properties with regard to clustered index performance, so that
+typically you would add a "created" timestamp for example that holds the clustered index instead
+of making the GUID a clustered index.
+
 ## Example API:
 
     @@@ php
