@@ -30,18 +30,6 @@ use Doctrine\DBAL\Connection;
 interface ShardManager
 {
     /**
-     * SELECT queries after this statement will be issued against all shards.
-     *
-     * Results are appended to each other in the order of the shards. No
-     * processing is done with regard to aggregates/distinct or other types of
-     * queries that are impossible to generically distribute accross databases.
-     *
-     * @param array $options
-     * @return void
-     */
-    function useAllShards(array $options = array());
-
-    /**
      * SELECT queries after this statement will be issued against the selected
      * shard.
      *
@@ -52,17 +40,7 @@ interface ShardManager
      * @param array $options
      * @return void
      */
-    function useShard($shardIdentifier, array $options = array());
-
-    /**
-     * SELECT queries after this statement are issued against the set of
-     * selected shards.
-     *
-     * @param array $shardIdentifiers
-     * @param array $options
-     * @return void
-     */
-    function useShards(array $shardIdentifiers, array $options = array());
+    function selectShard($shardIdentifier, array $options = array());
 
     /**
      * Return an array of all the currently active shards with some details

@@ -17,9 +17,8 @@ Implementing Federations inside a new Doctrine Sharding Extension. Some extensio
 2. ORM (Object-Relational Mapper)
 
 * Federation Key has to be part of the clustered index of the table
-    * Test with a pure Multi-Tenent App with Filtering = ON
-    * Test with example-app using Composite Key support  (Filtering OFF possible)
-* Extend ID Generation layer
+    * Test with a pure Multi-Tenent App with Filtering = ON (TaskList)
+    * Test with sharded app (Weather)
 * Implement API that allow users to choose the shard target for any given query
 
 ## Example API:
@@ -32,8 +31,6 @@ Implementing Federations inside a new Doctrine Sharding Extension. Some extensio
         'dbname' => 'dbname.database.windows.net',
         'driverClass' => 'Doctrine\Shards\DBAL\SQLAzure\AzureConnection',
         'sharding' => array(
-            'queryResolver' => 'Doctrine\Shards\DBAL\SQLAzure\AzureQueryResolver',
-            'shardResolver' => 'Doctrine\Shards\DBAL\SQLAzure\AzureShardResolver',
             'federationName' => 'Orders_Federation',
             'distributionKey' => 'CustID',
         ),
@@ -71,7 +68,7 @@ Implementing Federations inside a new Doctrine Sharding Extension. Some extensio
     $shardManager->useShards( array($value1, $value2) );
 
 ## Shard Management API
-    
+
     @@@ php
     <?php
 
