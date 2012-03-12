@@ -4,7 +4,7 @@ Doctrine Extension to support horizontal sharding in the Doctrine ORM.
 
 ## Idea
 
-Implement sharding inside Doctrine at a level that is almost invisible to the developer.
+Implement sharding inside Doctrine at a level that is unobstrusive to the developer as possible.
 
 Problems to tackle:
 
@@ -36,7 +36,7 @@ Instead of `Doctrine\DBAL\Connection` and the respective statement we need a sha
 
 ### SQL Azure Federations
 
-SQL Azure is a special case, points 1, 2, 3 and 8 are partly handled on the database level. This makes it a perfect test-implementation for just the subset of features in points 4-7. However there need to be a way to configure SchemaTool to generate the correct Schema on SQL Azure.
+SQL Azure is a special case, points 1, 2, 3, 4, 7 and 8 are partly handled on the database level. This makes it a perfect test-implementation for just the subset of features in points 5-6. However there need to be a way to configure SchemaTool to generate the correct Schema on SQL Azure.
 
 * SELECT Operations: The most simple assumption is to always query all shards unless the user specifies otherwise explicitly.
 * Queries can be merged in PHP code, this obviously does not work for DISTINCT, GROUP BY and ORDER BY queries.

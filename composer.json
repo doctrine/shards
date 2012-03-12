@@ -1,0 +1,11 @@
+{
+    "name": "doctrine/shards",
+    "require": {
+        "doctrine/dbal": "master-dev"
+    },
+    "autoload": {
+        "psr-0": {
+            "Doctrine\\Shards\\": "lib"
+        }
+    }
+}

@@ -19,6 +19,15 @@
 
 namespace Doctrine\Shards\DBAL\SQLAzure\Schema;
 
+use Doctrine\DBAL\Schema\Visitor\Visitor,
+    Doctrine\DBAL\Schema\Table,
+    Doctrine\DBAL\Schema\Schema,
+    Doctrine\DBAL\Schema\Column,
+    Doctrine\DBAL\Schema\ForeignKeyConstraint,
+    Doctrine\DBAL\Schema\Constraint,
+    Doctrine\DBAL\Schema\Sequence,
+    Doctrine\DBAL\Schema\Index;
+
 /**
  * Converts a single tenant schema into a multi-tenant schema for SQL Azure
  * Federations under the following assumptions:
@@ -28,14 +37,17 @@ namespace Doctrine\Shards\DBAL\SQLAzure\Schema;
  * - Every Primary key of a federated table is extended by another column
  *   'tenant_id' with a default value of the SQLAzure function
  *   `federation_filtering_value('tenant_id')`.
- * - You have to work with `filtering=On` when using federations.
+ * - You always have to work with `filtering=On` when using federations with this
+ *   multi-tenant approach.
  * - Primary keys are either using globally unique ids (GUID, Table Generator)
  *   or you explicitly add the tenent_id in every UPDATE or DELETE statement
  *   (otherwise they will affect the same-id rows from other tenents as well).
+ *   SQLAzure throws exception when IDENTIY columns are used on federated
+ *   tables.
  *
  * @author Benjamin Eberlei <kontakt@beberlei.de>
  */
-class MultiTenantVisitor
+class MultiTenantVisitor implements Visitor
 {
     /**
      * @var array
@@ -50,13 +62,89 @@ class MultiTenantVisitor
     /**
      * @var string
      */
-    private $tenantColumnType;
+    private $tenantColumnType = 'integer';
 
-    public function __construct(array $excludedTables = array(), $tenantColumnName = 'tenant_id', $tenantColumnType = 'integer')
+    public function __construct(array $excludedTables = array(), $tenantColumnName = 'tenant_id')
     {
         $this->excludedTables = $excludedTables;
         $this->tenantColumnName = $tenantColumnName;
-        $this->tenantColumnType = $tenantColumnType;
+    }
+
+    /**
+     * @param Table $table
+     */
+    public function acceptTable(Table $table)
+    {
+        if (in_array($table->getName(), $this->excludedTables)) {
+            return;
+        }
+
+        // TODO: will only work with integer columns as of now.
+        $table->addColumn($this->tenantColumnName, $this->tenantColumnType, array(
+            'default' => "federation_filtering_value('". $this->tenantColumnName ."')",
+        ));
+
+        $clusteredIndex = $this->getClusteredIndex($table);
+
+        $indexColumns = $clusteredIndex->getColumns();
+        $indexColumns[] = $this->tenantColumnName;
+
+        if ($clusteredIndex->isPrimary()) {
+            $table->dropPrimaryKey();
+            $table->setPrimaryKey($indexColumns);
+        } else {
+            $table->dropIndex($clusteredIndex->getName());
+            $table->addIndex($indexColumns);
+        }
+    }
+
+    private function getClusteredIndex($table)
+    {
+        foreach ($table->getIndexes() as $index) {
+            if ($index->isPrimary() && ! $index->hasFlag('nonclustered')) {
+                return $index;
+            } else if ($index->hasFlag('clustered')) {
+                return $index;
+            }
+        }
+        throw new \RuntimeException("No clustered index found on table " . $table->getName());
+    }
+
+    /**
+     * @param Schema $schema
+     */
+    public function acceptSchema(Schema $schema)
+    {
+    }
+
+    /**
+     * @param Column $column
+     */
+    public function acceptColumn(Table $table, Column $column)
+    {
+    }
+
+    /**
+     * @param Table $localTable
+     * @param ForeignKeyConstraint $fkConstraint
+     */
+    public function acceptForeignKey(Table $localTable, ForeignKeyConstraint $fkConstraint)
+    {
+    }
+
+    /**
+     * @param Table $table
+     * @param Index $index
+     */
+    public function acceptIndex(Table $table, Index $index)
+    {
+    }
+
+    /**
+     * @param Sequence $sequence
+     */
+    public function acceptSequence(Sequence $sequence)
+    {
     }
 }
 
