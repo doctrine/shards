@@ -2,12 +2,14 @@
     "hash": "e21f09d98eab36f406f41df55b7e18dd",
     "packages": [
         {
-            "package": "doctrine\/common",
-            "version": "2.2.0"
+            "package": "doctrine/common",
+            "version": "2.2.1"
         },
         {
-            "package": "doctrine\/dbal",
-            "version": "master-dev"
+            "package": "doctrine/dbal",
+            "version": "dev-master",
+            "source-reference": "456a756febb258b52092fa2640c77bb8400114fa"
         }
-    ]
+    ],
+    "aliases": []
 }
