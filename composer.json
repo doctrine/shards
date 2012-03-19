@@ -1,7 +1,7 @@
 {
     "name": "doctrine/shards",
     "require": {
-        "doctrine/dbal": "master-dev"
+        "doctrine/dbal": ">=2.1"
     },
     "autoload": {
         "psr-0": {

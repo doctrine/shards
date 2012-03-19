@@ -33,22 +33,27 @@ class SQLAzureShardManager implements ShardManager
     /**
      * @var string
      */
-    private $defaultFederationName;
+    private $federationName;
 
     /**
      * @var bool
      */
-    private $defaultFilteringEnabled;
+    private $filteringEnabled;
 
     /**
      * @var string
      */
-    private $defaultDistributionKey;
+    private $distributionKey;
 
     /**
      * @var Connection
      */
     private $conn;
+
+    /**
+     * @var string
+     */
+    private $currentDistributionValue;
 
     /**
      * @param Connection $conn
@@ -57,72 +62,107 @@ class SQLAzureShardManager implements ShardManager
     {
         $this->conn = $conn;
         $params = $conn->getParams();
+
         if ( ! isset($params['federationName'])) {
             throw ShardingException::missingDefaultFederationName();
         }
+
         if ( ! isset($params['distributionKey'])) {
             throw ShardingException::missingDefaultDistributionKey();
         }
-        $this->defaultFederationNameName = $params['federationName'];
-        $this->defaultDistributionKey = $params['distributionKey'];
-        $this->defaultFilteringEnabled = (isset($params['filteringEnabled'])) ? (bool)$params['filteringEnabled'] : false;
+
+        $this->federationNameName = $params['federationName'];
+        $this->distributionKey = $params['distributionKey'];
+        $this->filteringEnabled = (isset($params['filteringEnabled'])) ? (bool)$params['filteringEnabled'] : false;
     }
 
     /**
      * @override
      * {@inheritDoc}
      */
-    public function useShard($shardIdentifier, array $options = array());
+    public function selectGlobal()
     {
-        if (!$shardIdentifier) {
-            $sql = "USE FEDERATION ROOT WITH RESET";
-            $params = array();
+        if ($this->conn->isTransactionActive()) {
+            throw ShardingException::activeTransaction();
+        }
+
+        $sql = "USE FEDERATION ROOT WITH RESET";
+        $this->conn->executeQuery($sql);
+        $this->currentDistributionValue = null;
+    }
+
+    /**
+     * @override
+     * {@inheritDoc}
+     */
+    public function selectShard($distributionValue)
+    {
+        if ($this->conn->isTransactionActive()) {
+            throw ShardingException::activeTransaction();
+        }
+
+        if ($distributionValue === null || is_bool($distributionValue) || !is_scalar($distributionValue)) {
+            throw ShardingException::noShardDistributionValue();
+        }
+
+        $platform = $this->conn->getDatabasePlatform();
+        $sql = sprintf(
+            "USE FEDERATION %s (%s = ?) WITH RESET, FILTERING = %s",
+            $platform->quoteIdentifier($this->federationName),
+            $platform->quoteIdentifier($this->distributionKey),
+            ($this->filteringFlag ? 'ON' : 'OFF')
+        );
+        $this->conn->executeQuery($sql, array($distributionValue));
+        $this->currentDistributionValue = $distributionValue;
+    }
+
+    /**
+     * @override
+     * {@inheritDoc}
+     */
+    public function getCurrentDistributionValue()
+    {
+        return $this->currentDistributionValue;
+    }
+
+    /**
+     * @override
+     * {@inheritDoc}
+     */
+    public function getShards()
+    {
+        $sql = "SELECT d.member_id as name, d.Distribution_name as distributionKey, " .
+               " d.Range_low as rangeLow, d.Range_high as rangeHigh " .
+               "FROM sys.federation_member_distributions d " .
+               "INNER JOIN sys.federations f ON f.federation_id = d.federation_id " .
+               "WHERE f.name = ?";
+        return $this->conn->fetchAll($sql, array($this->federationName));
+    }
+
+     /**
+      * @override
+      * {@inheritDoc}
+      */
+    public function queryAll($sql, array $params, array $types)
+    {
+        $oldDistribution = $this->getCurrentDistributionValue();
+        $shards = $this->getShards();
+
+        $result = array();
+        foreach ($shards as $shard) {
+            $this->selectShard($shard['rangeLow']);
+            foreach ($this->conn->fetchAll($sql, $params, $types) as $row) {
+                $result[] = $row;
+            }
+        }
+
+        if ($oldDistribution === null) {
+            $this->selectGlobal();
         } else {
-            $federationName = $this->getFederationName($options);
-            $distributionKey = $this->getDistributionKey($options);
-            $filteringFlag = $this->getFilteringFlag($options);
-
-            $this->assertValidKeyword($federationName);
-            $this->assertValidKeyword($distributionKey);
-
-            $sql = sprintf(
-                "USE FEDERATION %s (%s = ?) WITH RESET, FILTERING = %s",
-                $federationName, $distributionKey, $filteringFlag
-            );
-            $params = array($shardIdentifier);
+            $this->selectShard($oldDistribution);
         }
-        $this->conn->executeQuery($sql, $params);
-    }
 
-    public function useShards(array $shardIdentifiers, array $options = array());
-    {
-        throw ShardingException::notImplemented();
-    }
-
-    public function useAllShards(array $options = array())
-    {
-        throw ShardingException::notImplemented();
-    }
-
-    public function getShards();
-    {
-
-    }
-
-    private function getFederationName(array $options)
-    {
-        if (!isset($options['federationName'])) {
-            return $this->defaultFederationName;
-        }
-        return $options['federationName'];
-    }
-
-    private function getDistributionKey(array $options)
-    {
-        if (!isset($options['distributionKey'])) {
-
-        }
-        return $options['distributionKey'];
+        return $result;
     }
 }
 

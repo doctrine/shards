@@ -25,29 +25,71 @@ use Doctrine\DBAL\Connection;
  * Sharding Manager gives access to APIs to implementing sharding on top of
  * Doctrine\DBAL\Connection instances.
  *
+ * For simplicity and developer ease-of-use (and understanding) the sharding
+ * API only covers single shard queries, no fan-out support. It is primarily
+ * suited for multi-tenant applications.
+ *
+ * The assumption about sharding here
+ * is that a distribution value can be found that gives access to all the
+ * necessary data for all use-cases. Switching between shards should be done with
+ * caution, especially if lazy loading is implemented. Any query is always
+ * executed against the last shard that was selected. If a query is created for
+ * a shard Y but then a shard X is selected when its actually excecuted you
+ * will hit the wrong shard.
+ *
  * @author Benjamin Eberlei <kontakt@beberlei.de>
  */
 interface ShardManager
 {
     /**
+     * Select global database with global data.
+     *
+     * This is the default database that is connected when no shard is
+     * selected.
+     *
+     * @return void
+     */
+    function selectGlobal();
+
+    /**
      * SELECT queries after this statement will be issued against the selected
      * shard.
      *
-     * You can reset the sharding to its default value by calling
-     * <code>useShard(null);</code>
-     *
-     * @param string $shardIdentifier
+     * @throws ShardingException If no value is passed as shard identifier.
+     * @param mixed $distributionValue
      * @param array $options
      * @return void
      */
-    function selectShard($shardIdentifier, array $options = array());
+    function selectShard($distributionValue);
 
     /**
-     * Return an array of all the currently active shards with some details
-     * depending on the sharding implementation.
+     * Get the distribution value currently used for sharding.
      *
-     * @return Shard[]
+     * @return string
+     */
+    function getCurrentDistributionValue();
+
+    /**
+     * Get information about the amount of shards and other details.
+     *
+     * Format is implementation specific, each shard is one element and has a
+     * 'name' attribute at least.
+     *
+     * @return array
      */
     function getShards();
+
+    /**
+     * Query all shards in undefined order and return the results appended to
+     * each other. Restore the previous distribution value after execution.
+     *
+     * Using {@link Connection::fetchAll} to retrieve rows internally.
+     *
+     * @param string $sql
+     * @param array $params
+     * @param array $types
+     * @return array
+     */
+    function queryAll($sql, array $params, array $types);
 }
 

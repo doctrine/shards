@@ -18,6 +18,22 @@ Problems to tackle:
 8. How to handle multiple connections?
 9. Implementation on the DBAL or ORM level?
 
+## Roadmap
+
+Version 1: DBAL 2.3 (Multi-Tenant Apps)
+
+    1. ID Generation support (in DBAL + ORM done)
+    2. Multi-Tenant Support: Either pick a global metadata database or exactly one shard.
+    3. Fan-out queries over all shards (or a subset) by result appending
+
+Version 2: ORM related (complex):
+
+    4. Id resolving (Pick shard for a new id)
+    5. Query resolving (Pick shards a query should send to)
+    6. Shard resolving (Pick shards an ID could be on)
+    7. Transactions
+    8. Read Only objects
+
 ## Technical Requirements for Database Schemas
 
 Sharded tables require the sharding-distribution key as one of their columns. This will affect your code compared to a normalized db-schema. If you have a Blog <-> BlogPost <-> PostComments entity setup sharded by `blog_id` then even the PostComment table needs this column, even if an "unsharded", normalized DB-Schema does not need this information.
@@ -27,12 +43,10 @@ Sharded tables require the sharding-distribution key as one of their columns. Th
 Assumptions:
 
 * For querying you either want to query ALL or just exactly one shard.
-* IDs for ALL sharded tables are unique across all shards.
+* IDs for ALL sharded tables have to be unique across all shards.
 * Non-shareded data is replicated between all shards. They redundantly keep the information available. This is necessary so join queries on shards to reference data work.
 * If you retrieve an object A from a shard, then all references and collections of this object reside on the same shard.
 * The database schema on all shards is the same (or compatible)
-
-Instead of `Doctrine\DBAL\Connection` and the respective statement we need a sharding aware connection that can distribute queries.
 
 ### SQL Azure Federations
 
@@ -58,66 +72,3 @@ Here also queries can always be limited to a single shard.
 2. Scale-Out by some attribute (Round-Robin?)
 
 This strategy requires to access multiple shards in a single request based on the data accessed.
-
-## API
-
-    @@@ php
-    <?php
-
-    namespace Doctrine\Shards\DBAL;
-
-    /**
-     * Extended functionality on the connection for sharding.
-     */
-    interface ShardingConnection
-    {
-        function getShardingManager();
-    }
-
-    interface ShardingManager
-    {
-        function useShards(array $values);
-        function useShard($value);
-        function usetAllShards();
-        function getShards();
-        function getQueryResolver();
-        function getShardResolver();
-    }
-
-    interface QueryResolver
-    {
-        /**
-         * Returns the shard ids to query on
-         *
-         * Warning: If none are returned no query is executed and the result is empty.
-         * 
-         * @param array $shardIds
-         * @param string $sqlQuery
-         * @return array 
-         */
-        function resolve(array $shardIds, $sqlQuery);
-    }
-
-    interface ShardResolver
-    {
-        /**
-         * Resolve the shard to save a new database table entry on. 
-         * 
-         * @param array $shardIds
-         * @param string $tableName
-         * @param array $data
-         * @return int
-         */
-        function resolve(array $shardIds, $tableName, array $data);
-    }
-
-    $dbParams = array(
-        'dbname' => 'dbname.database.windows.net',
-        'driverClass' => 'Doctrine\Shards\DBAL\SQLAzure\AzureConnection',
-        'queryResolver' => 'Doctrine\Shards\DBAL\SQLAzure\AzureQueryResolver',
-        'shardResolver' => 'Doctrine\Shards\DBAL\SQLAzure\AzureShardResolver',
-        // ...
-    );
-
-    $conn = DriverManager::getConnection($dbParams);
-

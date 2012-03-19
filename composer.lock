@@ -8,7 +8,7 @@
         {
             "package": "doctrine/dbal",
             "version": "dev-master",
-            "source-reference": "456a756febb258b52092fa2640c77bb8400114fa"
+            "source-reference": "636286f1a573b3fa4f6020b08bb4102745d64fc0"
         }
     ],
     "aliases": []

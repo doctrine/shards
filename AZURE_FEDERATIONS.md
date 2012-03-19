@@ -12,14 +12,13 @@ Implementing Federations inside a new Doctrine Sharding Extension. Some extensio
 * Add API to ask about federations, federation members and so on.
 * Add Sharding Abstraction
     * If a shard is picked via distribution key and atomic value fire queries against this only
-    * If no shard is explicitly picked, execute fan out query against all shards and aggregate results
+    * Or query the global database.
 
 2. ORM (Object-Relational Mapper)
 
 * Federation Key has to be part of the clustered index of the table
     * Test with a pure Multi-Tenent App with Filtering = ON (TaskList)
     * Test with sharded app (Weather)
-* Implement API that allow users to choose the shard target for any given query
 
 ## Implementation Details
 
@@ -36,7 +35,7 @@ of making the GUID a clustered index.
     use Doctrine\DBAL\DriverManager;
 
     $dbParams = array(
-        'dbname' => 'dbname.database.windows.net',
+        'dbname' => 'tcp:dbname.database.windows.net',
         'driverClass' => 'Doctrine\Shards\DBAL\SQLAzure\AzureConnection',
         'sharding' => array(
             'federationName' => 'Orders_Federation',
@@ -53,113 +52,16 @@ of making the GUID a clustered index.
     $sql = "SELECT * FROM Products";
     $rows = $conn->executeQuery($sql);
 
-    // Example 2: query against all shards, fan out query
-    $shardManager->useAllShards();
-    $sql = "SELECT * FROM Customers";
-    $rows = $conn->executeQuery($sql);
-
-    // Example 3:  query against the selected shard with CustomerId = 100
+    // Example 2:  query against the selected shard with CustomerId = 100
     $aCustomerID = 100;
-    $shardManager->useShard($aCustomerID); // Using Default federationName and distributionKey
+    $shardManager->selectShard($aCustomerID); // Using Default federationName and distributionKey
     // Query: "USE FEDERATION Orders_Federation (CustID = $aCustomerID) WITH RESET, FILTERING OFF;"
 
     $sql = "SELECT * FROM Customers";
     $rows = $conn->executeQuery($sql);
 
-    // Example 4: SQL Azure specific sharding configuration
-    $shardManager->useShard($aCustomerID, array('filtering' => true, 'federationName' => 'OtherFederationName', 'distributionKey' => 'OtherId'));
-    // Query: "USE FEDERATION OtherFederationName (OtherId = $aCustomerID) WITH RESET, FILTERING ON;"
-
-    // Example 5: Reset API to root database again
-    $shardManager->useShard( null );
-
-    // Example 6: Query all shards that contain the given values (Fan Out)
-    $shardManager->useShards( array($value1, $value2) );
-
-## Shard Management API
-
-    @@@ php
-    <?php
-
-    use Doctrine\DBAL\DriverManager;
-
-    $dbParams = array(...);
-    $conn = DriverManager::getConnection($dbParams);
-    $shardManager = $conn->getShardManager();
-
-    $shards = $shardManager->getShards();
-    foreach ($shards as $shard) {
-        echo sprintf('ID: %d distributed by %s on range from %d to %d', 
-            $shard->getId(),
-            $shard->getDistributionKey(),
-            $shard->getRangeLow(),
-            $shard->getRangeHigh()
-        );
-    }
-
-## Shard DDL API
-
-Doctrine comes with an API to create Database schema from an object-oriented representation. This would be extended to be azure compatible through existing hooks:
-
-    @@@ php
-    <?php
-    use Doctrine\DBAL\Schema\Schema;
-
-    $schema = new Schema();
-    $customers = $schema->createTable("Customers");
-    $customers->addColumn('CustomerId', 'integer');
-    $customers->addColumn('CustomerName', 'string');
-    $customers->setPrimaryKey(array('CustomerId'));
-    $customers->addOption('azure.federatedOnDistributionName', 'CustId');
-    $customers->addOtpion('azure.federatedOnColumnName', 'CustomerId');
-    $customers->addOption('azure.federationName', 'Orders_Federation');
-
-    $orders = $schema->createTable('Orders');
-    $orders->addColumn('OrderId', 'integer');
-    $orders->addColumn('CustomerId', 'integer');
-    $orders->addColumn('OrderDate', 'datetime');
-    $orders->setPrimaryKey(array('OrderId', 'CustomerId'));
-    $orders->addOption('azure.federatedOnDistributionName', 'CustId');
-    $orders->addOtpion('azure.federatedOnColumnName', 'CustomerId');
-    $orders->addOption('azure.federationName', 'Orders_Federation');
-
-    $orderItems = $schema->createTable('OrderItems');
-    $orderItems->addColumn('OrderId', 'integer');
-    $orderItems->addColumn('CustomerId', 'integer');
-    $orderItems->addColumn('ProductId', 'integer');
-    $orderItems->addColumn('Quantity', 'integer');
-    $orderItems->setPrimaryKey(array('OrderId', 'CustomerId', 'ProductId'));
-    $orderItems->addOption('azure.federatedOnDistributionName', 'CustId');
-    $orderItems->addOtpion('azure.federatedOnColumnName', 'CustomerId');
-    $orderItems->addOption('azure.federationName', 'Orders_Federation');
-
-    $sqls = $schema->toSQL($conn->getDatabasePlatform());
-    foreach ($sqls as $sql) {
-        $conn->exec($sql);
-    }
-
-This should also be doable by a federation schema extension:
-
-    @@@ php
-    <?php
-    use Doctrine\Shards\DBAL\Azure\FederationSchemaVisitor;
-    use Doctrine\DBAL\Schema\Schema;
-
-    $schema = new Schema();
-    // build schema
-
-    $visitor = new FederationSchemaVisitor('Orders_Federation', 'CustId', 'integer', array(
-        'Customers' => 'CustomerId',
-        'Orders' => 'CustomerId',
-        'OrderItems' => 'CustomerId',
-    ));
-
-    $schema->visit($visitor);
-
-Following tasks have to be done by this visitor:
-
-1. Add Column to tables if not already existing
-2. Append Column to clustered index of the table if not yet part of it.
+    // Example 3: Reset API to root database again
+    $shardManager->selectGlobal();
 
 ## ID Generation
 
