@@ -10,7 +10,7 @@ class SQLAzureShardManagerTest extends \PHPUnit_Framework_TestCase
     {
         $this->setExpectedException('Doctrine\Shards\DBAL\ShardingException', 'SQLAzure requires a federation name to be set during sharding configuration.');
 
-        $conn = $this->createConnection(array('distributionKey' => 'abc'));
+        $conn = $this->createConnection(array('sharding' => array('distributionKey' => 'abc')));
         $sm = new SQLAzureShardManager($conn);
     }
 
@@ -18,13 +18,13 @@ class SQLAzureShardManagerTest extends \PHPUnit_Framework_TestCase
     {
         $this->setExpectedException('Doctrine\Shards\DBAL\ShardingException', 'SQLAzure requires a distribution key to be set during sharding configuration.');
 
-        $conn = $this->createConnection(array('federationName' => 'abc'));
+        $conn = $this->createConnection(array('sharding' => array('federationName' => 'abc')));
         $sm = new SQLAzureShardManager($conn);
     }
 
     public function testGetDefaultDistributionValue()
     {
-        $conn = $this->createConnection(array('federationName' => 'abc', 'distributionKey' => 'foo'));
+        $conn = $this->createConnection(array('sharding' => array('federationName' => 'abc', 'distributionKey' => 'foo')));
 
         $sm = new SQLAzureShardManager($conn);
         $this->assertNull($sm->getCurrentDistributionValue());
@@ -32,7 +32,7 @@ class SQLAzureShardManagerTest extends \PHPUnit_Framework_TestCase
 
     public function testSelectGlobalTransactionActive()
     {
-        $conn = $this->createConnection(array('federationName' => 'abc', 'distributionKey' => 'foo'));
+        $conn = $this->createConnection(array('sharding' => array('federationName' => 'abc', 'distributionKey' => 'foo')));
         $conn->expects($this->at(1))->method('isTransactionActive')->will($this->returnValue(true));
 
         $this->setExpectedException('Doctrine\Shards\DBAL\ShardingException', 'Cannot switch shard during an active transaction.');
@@ -43,9 +43,9 @@ class SQLAzureShardManagerTest extends \PHPUnit_Framework_TestCase
 
     public function testSelectGlobal()
     {
-        $conn = $this->createConnection(array('federationName' => 'abc', 'distributionKey' => 'foo'));
+        $conn = $this->createConnection(array('sharding' => array('federationName' => 'abc', 'distributionKey' => 'foo')));
         $conn->expects($this->at(1))->method('isTransactionActive')->will($this->returnValue(false));
-        $conn->expects($this->at(2))->method('executeQuery')->with($this->equalTo('USE FEDERATION ROOT WITH RESET'));
+        $conn->expects($this->at(2))->method('exec')->with($this->equalTo('USE FEDERATION ROOT WITH RESET'));
 
         $sm = new SQLAzureShardManager($conn);
         $sm->selectGlobal();
@@ -53,7 +53,7 @@ class SQLAzureShardManagerTest extends \PHPUnit_Framework_TestCase
 
     public function testSelectShard()
     {
-        $conn = $this->createConnection(array('federationName' => 'abc', 'distributionKey' => 'foo'));
+        $conn = $this->createConnection(array('sharding' => array('federationName' => 'abc', 'distributionKey' => 'foo')));
         $conn->expects($this->at(1))->method('isTransactionActive')->will($this->returnValue(true));
 
         $this->setExpectedException('Doctrine\Shards\DBAL\ShardingException', 'Cannot switch shard during an active transaction.');
@@ -66,7 +66,7 @@ class SQLAzureShardManagerTest extends \PHPUnit_Framework_TestCase
 
     public function testSelectShardNoDistriubtionValue()
     {
-        $conn = $this->createConnection(array('federationName' => 'abc', 'distributionKey' => 'foo'));
+        $conn = $this->createConnection(array('sharding' => array('federationName' => 'abc', 'distributionKey' => 'foo')));
         $conn->expects($this->at(1))->method('isTransactionActive')->will($this->returnValue(false));
 
         $this->setExpectedException('Doctrine\Shards\DBAL\ShardingException', 'You have to specify a string or integer as shard distribution value.');
@@ -77,7 +77,7 @@ class SQLAzureShardManagerTest extends \PHPUnit_Framework_TestCase
 
     private function createConnection(array $params)
     {
-        $conn = $this->getMock('Doctrine\DBAL\Connection', array('getParams', 'executeQuery', 'isTransactionActive'), array(), '', false);
+        $conn = $this->getMock('Doctrine\DBAL\Connection', array('getParams', 'exec', 'isTransactionActive'), array(), '', false);
         $conn->expects($this->at(0))->method('getParams')->will($this->returnValue($params));
         return $conn;
     }

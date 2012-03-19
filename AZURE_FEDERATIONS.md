@@ -36,7 +36,6 @@ of making the GUID a clustered index.
 
     $dbParams = array(
         'dbname' => 'tcp:dbname.database.windows.net',
-        'driverClass' => 'Doctrine\Shards\DBAL\SQLAzure\AzureConnection',
         'sharding' => array(
             'federationName' => 'Orders_Federation',
             'distributionKey' => 'CustID',

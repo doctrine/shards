@@ -63,17 +63,28 @@ class SQLAzureShardManager implements ShardManager
         $this->conn = $conn;
         $params = $conn->getParams();
 
-        if ( ! isset($params['federationName'])) {
+        if ( ! isset($params['sharding']['federationName'])) {
             throw ShardingException::missingDefaultFederationName();
         }
 
-        if ( ! isset($params['distributionKey'])) {
+        if ( ! isset($params['sharding']['distributionKey'])) {
             throw ShardingException::missingDefaultDistributionKey();
         }
 
-        $this->federationNameName = $params['federationName'];
-        $this->distributionKey = $params['distributionKey'];
-        $this->filteringEnabled = (isset($params['filteringEnabled'])) ? (bool)$params['filteringEnabled'] : false;
+        $this->federationName = $params['sharding']['federationName'];
+        $this->distributionKey = $params['sharding']['distributionKey'];
+        $this->filteringEnabled = (isset($params['sharding']['filteringEnabled'])) ? (bool)$params['sharding']['filteringEnabled'] : false;
+    }
+
+    /**
+     * Enabled/Disable filtering on the fly.
+     *
+     * @param bool $flag
+     * @return void
+     */
+    public function setFilteringEnabled($flag)
+    {
+        $this->filteringEnabled = (bool)$flag;
     }
 
     /**
@@ -87,7 +98,7 @@ class SQLAzureShardManager implements ShardManager
         }
 
         $sql = "USE FEDERATION ROOT WITH RESET";
-        $this->conn->executeQuery($sql);
+        $this->conn->exec($sql);
         $this->currentDistributionValue = null;
     }
 
@@ -107,12 +118,14 @@ class SQLAzureShardManager implements ShardManager
 
         $platform = $this->conn->getDatabasePlatform();
         $sql = sprintf(
-            "USE FEDERATION %s (%s = ?) WITH RESET, FILTERING = %s",
+            "USE FEDERATION %s (%s = %s) WITH RESET, FILTERING = %s;",
             $platform->quoteIdentifier($this->federationName),
             $platform->quoteIdentifier($this->distributionKey),
-            ($this->filteringFlag ? 'ON' : 'OFF')
+            $this->conn->quote($distributionValue),
+            ($this->filteringEnabled ? 'ON' : 'OFF')
         );
-        $this->conn->executeQuery($sql, array($distributionValue));
+
+        $this->conn->exec($sql);
         $this->currentDistributionValue = $distributionValue;
     }
 
@@ -131,24 +144,30 @@ class SQLAzureShardManager implements ShardManager
      */
     public function getShards()
     {
-        $sql = "SELECT d.member_id as name, d.Distribution_name as distributionKey, " .
-               " d.Range_low as rangeLow, d.Range_high as rangeHigh " .
-               "FROM sys.federation_member_distributions d " .
-               "INNER JOIN sys.federations f ON f.federation_id = d.federation_id " .
-               "WHERE f.name = ?";
-        return $this->conn->fetchAll($sql, array($this->federationName));
+        $sql = "SELECT member_id as name,
+                      distribution_name as distribution_key,
+                      CAST(range_low AS CHAR) AS rangeLow,
+                      CAST(range_high AS CHAR) AS rangeHigh
+                      FROM sys.federation_member_distributions d
+                      INNER JOIN sys.federations f ON f.federation_id = d.federation_id
+                      WHERE f.name = " . $this->conn->quote($this->federationName);
+        return $this->conn->fetchAll($sql);
     }
 
      /**
       * @override
       * {@inheritDoc}
       */
-    public function queryAll($sql, array $params, array $types)
+    public function queryAll($sql, array $params = array(), array $types = array())
     {
-        $oldDistribution = $this->getCurrentDistributionValue();
         $shards = $this->getShards();
+        if (!$shards) {
+            throw new \RuntimeException("No shards found for " . $this->federationName);
+        }
 
         $result = array();
+        $oldDistribution = $this->getCurrentDistributionValue();
+
         foreach ($shards as $shard) {
             $this->selectShard($shard['rangeLow']);
             foreach ($this->conn->fetchAll($sql, $params, $types) as $row) {
