@@ -1,5 +1,5 @@
 {
-    "hash": "e21f09d98eab36f406f41df55b7e18dd",
+    "hash": "f1bf274cd5347d7e1223a2212281f907",
     "packages": [
         {
             "package": "doctrine/common",
@@ -8,7 +8,7 @@
         {
             "package": "doctrine/dbal",
             "version": "dev-master",
-            "source-reference": "636286f1a573b3fa4f6020b08bb4102745d64fc0"
+            "source-reference": "c64dd83702f5f51814444540554a2ee906cd9416"
         }
     ],
     "aliases": []
