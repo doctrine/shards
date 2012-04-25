@@ -144,7 +144,7 @@ class SQLAzureShardManager implements ShardManager
      */
     public function getShards()
     {
-        $sql = "SELECT member_id as name,
+        $sql = "SELECT member_id as id,
                       distribution_name as distribution_key,
                       CAST(range_low AS CHAR) AS rangeLow,
                       CAST(range_high AS CHAR) AS rangeHigh
