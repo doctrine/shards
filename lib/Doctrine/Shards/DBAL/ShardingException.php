@@ -47,5 +47,10 @@ class ShardingException extends DBALException
     {
         return new self("You have to specify a string or integer as shard distribution value.", 1332142103);
     }
+
+    static public function missingDistributionType()
+    {
+        return new self("You have to specify a sharding distribution type such as 'integer', 'string', 'guid'.");
+    }
 }
 

@@ -1,44 +1,33 @@
 <?php
 namespace Doctrine\Tests\Shards\DBAL\SQLAzure;
 
-use Doctrine\DBAL\DriverManager;
-use Doctrine\Shards\DBAL\SQLAzure\SQLAzureShardManager;
+use Doctrine\Shards\DBAL\SQLAzure\SQLAzureSchemaSynchronizer;
 
-class FunctionalTest extends \PHPUnit_Framework_TestCase
+class FunctionalTest extends AbstractTestCase
 {
-    private $conn;
-    private $sm;
-
-    public function setUp()
-    {
-        if (!isset($GLOBALS['db_type']) || strpos($GLOBALS['db_type'], "sqlsrv") === false) {
-            $this->markTestSkipped('No driver or sqlserver driver specified.');
-        }
-
-        $params = array(
-            'driver' => $GLOBALS['db_type'],
-            'dbname' => $GLOBALS['db_name'],
-            'user' => $GLOBALS['db_username'],
-            'password' => $GLOBALS['db_password'],
-            'host' => $GLOBALS['db_host'],
-            'sharding' => array(
-                'federationName' => 'Orders_Federation',
-                'distributionKey' => 'CustID',
-                'filteringEnabled' => false,
-            ),
-            'driverOptions' => array('MultipleActiveResultSets' => false)
-        );
-        $this->conn = DriverManager::getConnection($params);
-        // assume database is created and schema is:
-        // Global products table
-        // Customers, Orders, OrderItems federation tables.
-        // See http://cloud.dzone.com/articles/using-sql-azure-federations
-        $this->sm = new SQLAzureShardManager($this->conn);
-    }
-
     public function testSharding()
     {
+        $schema = $this->createShopSchema();
+
+        $synchronizer = new SQLAzureSchemaSynchronizer($this->conn, $this->sm);
+        $synchronizer->dropAllSchema();
+        $synchronizer->createSchema($schema);
+
         $this->sm->selectShard(0);
+
+        $this->conn->insert("Products", array(
+            "ProductID" => 1,
+            "SupplierID" => 2,
+            "ProductName" => "Test",
+            "Price" => 10.45
+        ));
+
+        $this->conn->insert("Customers", array(
+            "CustomerID" => 1,
+            "CompanyName" => "Foo",
+            "FirstName" => "Benjamin",
+            "LastName" => "E.",
+        ));
 
         $query = "SELECT * FROM Products";
         $data = $this->conn->fetchAll($query);
@@ -49,7 +38,7 @@ class FunctionalTest extends \PHPUnit_Framework_TestCase
         $this->assertTrue(count($data) > 0);
 
         $data = $this->sm->queryAll("SELECT * FROM Customers");
-        #$this->assertTrue(count($data) > 0);
+        $this->assertTrue(count($data) > 0);
     }
 }
 

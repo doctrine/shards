@@ -46,6 +46,11 @@ class SQLAzureShardManager implements ShardManager
     private $distributionKey;
 
     /**
+     * @var string
+     */
+    private $distributionType;
+
+    /**
      * @var Connection
      */
     private $conn;
@@ -71,9 +76,44 @@ class SQLAzureShardManager implements ShardManager
             throw ShardingException::missingDefaultDistributionKey();
         }
 
+        if ( ! isset($params['sharding']['distributionType'])) {
+            throw ShardingException::missingDistributionType();
+        }
+
         $this->federationName = $params['sharding']['federationName'];
         $this->distributionKey = $params['sharding']['distributionKey'];
+        $this->distributionType = $params['sharding']['distributionType'];
         $this->filteringEnabled = (isset($params['sharding']['filteringEnabled'])) ? (bool)$params['sharding']['filteringEnabled'] : false;
+    }
+
+    /**
+     * Get name of the federation
+     *
+     * @return string
+     */
+    public function getFederationName()
+    {
+        return $this->federationName;
+    }
+
+    /**
+     * Get the distribution key
+     *
+     * @return string
+     */
+    public function getDistributionKey()
+    {
+        return $this->distributionKey;
+    }
+
+    /**
+     * Get the Doctrine Type name used for the distribution
+     *
+     * @return string
+     */
+    public function getDistributionType()
+    {
+        return $this->distributionType;
     }
 
     /**
