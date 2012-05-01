@@ -30,7 +30,7 @@ the following content:
     {
         "require": {
             "doctrine/dbal": "2.2.2",
-            "doctrine/shards": "0.1"
+            "doctrine/shards": "0.2"
         }
     }
 
@@ -51,9 +51,10 @@ The first thing to start with is setting up Doctrine and the database connection
     use Doctrine\DBAL\DriverManager;
     use Doctrine\Shards\DBAL\SQLAzure\SQLAzureShardManager;
 
-    require_once "vendor/composer/autoload.php";
+    require_once "vendor/autoload.php";
 
     $conn = DriverManager::getConnection(array(
+        'driver'   => 'pdo_sqlsrv',
         'dbname'   => 'SalesDB',
         'host'     => 'tcp:dbname.windows.net',
         'user'     => 'user@dbname',
@@ -64,21 +65,13 @@ The first thing to start with is setting up Doctrine and the database connection
             'distributionType' => 'integer',
         )
     ));
+
     $shardManager = new SQLAzureShardManager($conn);
 
 Create Database
 ---------------
 
-We can create a new database we use for this federation tutorial. Doctrine
-offers a SchemaManager API to create databases:
-
-.. code-block:: php
-
-    <?php
-    // create_database.php
-    require_once 'bootstrap.php';
-
-    $conn->getSchemaManager()->createDatabase('SalesDB');
+Create a new database using the Azure/SQL Azure management console.
 
 Create Schema
 -------------
@@ -264,8 +257,7 @@ operation for us:
         'LastName' => 'Brehm',
     ));
 
-    $conn->executeUpdate("
-        DECLARE @orderId INT
+    $conn->executeUpdate("DECLARE @orderId INT
 
         DECLARE @customerId INT
 
@@ -303,7 +295,8 @@ operation for us:
         VALUES (@customerId, @orderId, GetDate())
 
         INSERT INTO OrderItems (CustomerID, OrderID, ProductID, Quantity)
-        VALUES (@customerId, @orderId, 388, 1)");
+        VALUES (@customerId, @orderId, 388, 1)"
+    );
 
 This puts the data into the currently only existing federation member. We
 selected that federation member by picking 0 as distribution value, which is by
@@ -320,6 +313,8 @@ executed this command.
 
     <?php
     // split_federation.php
+    require_once 'bootstrap.php';
+
     $shardManager->splitFederation(60);
 
 This little script uses the shard manager with a special method only existing
@@ -342,6 +337,8 @@ have him create an order.
 
     <?php
     // insert_data_aftersplit.php
+    require_once 'bootstrap.php';
+
     $newCustomerId = 55;
 
     $shardManager->selectShard($newCustomerId);

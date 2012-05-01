@@ -22,6 +22,7 @@ namespace Doctrine\Shards\DBAL\SQLAzure;
 use Doctrine\Shards\DBAL\ShardManager;
 use Doctrine\Shards\DBAL\ShardingException;
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Types\Type;
 
 /**
  * Sharding using the SQL Azure Federations support.
@@ -231,9 +232,11 @@ class SQLAzureShardManager implements ShardManager
      */
     public function splitFederation($splitDistributionValue)
     {
+        $type = Type::getType($this->distributionType);
+
         $sql = "ALTER FEDERATION " . $this->getFederationName() . " " .
                "SPLIT AT (" . $this->getDistributionKey() . " = " .
-               $this->conn->quote($splitDistributionValue);
+               $this->conn->quote($splitDistributionValue, $type->getBindingType());
         $this->conn->exec($sql);
     }
 }

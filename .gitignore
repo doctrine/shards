@@ -1,3 +1,5 @@
 vendor
 *.phpunit.xml
 *.swp
+examples/sharding/vendor
+examples/sharding/composer.lock

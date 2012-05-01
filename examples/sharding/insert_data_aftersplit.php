@@ -1,5 +1,7 @@
 <?php
 // insert_data_aftersplit.php
+require_once 'bootstrap.php';
+
 $newCustomerId = 55;
 
 $shardManager->selectShard($newCustomerId);

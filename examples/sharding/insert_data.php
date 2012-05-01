@@ -23,7 +23,7 @@ $conn->insert("Products", array(
     "Price" => 10.50,
 ));
 $conn->insert("Products", array(
-    "ProductID" => 388,
+    "ProductID" => 389,
     "SupplierID" => 1001,
     "ProductName" => 'Bypass Filter 400 MHz Low Pass',
     "Price" => 10.50,
