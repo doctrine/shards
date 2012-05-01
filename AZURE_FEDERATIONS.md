@@ -37,8 +37,9 @@ of making the GUID a clustered index.
     $dbParams = array(
         'dbname' => 'tcp:dbname.database.windows.net',
         'sharding' => array(
-            'federationName' => 'Orders_Federation',
-            'distributionKey' => 'CustID',
+            'federationName'   => 'Orders_Federation',
+            'distributionKey'  => 'CustID',
+            'distributionType' => 'integer',
             'filteringEnabled' => false,
         ),
         // ...

@@ -9,18 +9,23 @@ yet to dynamically pick a shard based on ID, query or database row yet. That
 means the sharding extension is primarily suited for:
 
 1. multi-tenant applications or
-2. applications with perfectly separated datasets (example: weather data).
+2. applications with completly separated datasets (example: weather data).
 
-Both kind of application will work with both DBAL and ORM. Horizontal sharding is an
-evasive archicture that will affect your application code and using this
-extension to Doctrine will not make it work "magically". You have to understand
-and integrate the following drawbacks:
+Both kind of application will work with both DBAL and ORM.
 
-1. Pre-generation of IDs that are unique across all shards.
+.. note::
+
+    Horizontal sharding is an evasive archicture that will affect your application code and using this
+    extension to Doctrine will not make it work "magically".
+
+You have to understand and integrate the following drawbacks:
+
+1. Pre-generation of IDs that are unique across all shards required.
 2. No transaction support across shards.
 3. No foreign key support across shards (meaning no "real" relations).
 4. Very complex (or impossible) to query aggregates across shards.
-5. Composite keys where normalized non-sharded db schemas don't need them.
+5. Denormalization: Composite keys required where normalized non-sharded db schemas don't need them.
+6. Schema Operations have to be done on all shards.
 
 The primary questions in a sharding architecture are:
 
@@ -65,8 +70,8 @@ detail.
 ID Generation
 -------------
 
-To solve the issue of pre-insert generation of IDs there are several
-approaches:
+To solve the issue of unique ID-generation across all shards are several
+approaches you should evaluate:
 
 Use GUID/UUIDs
 ~~~~~~~~~~~~~~
@@ -77,9 +82,9 @@ universally unique identifiers. These are 16-byte
 You can `read up on UUIDs on Wikipedia
 <http://en.wikipedia.org/wiki/Universally_unique_identifier>`_.
 
-The drawback of UUIDs are the segmentation they cause on indexes. Because UUIDs
-in their default implementation are not sequentially generated, they can have
-negative impact on index access performance. Additionally they are much bigger
+The drawback of UUIDs is the segmentation they cause on indexes. Because UUIDs
+are not sequentially generated, they can have negative impact on index access
+performance. Additionally they are much bigger
 than numerical primary keys (which are normally 4-bytes in length).
 
 At the moment Doctrine DBAL drivers MySQL and SQL Server support the generation
@@ -88,12 +93,32 @@ platforms:
 
 .. code-block:: php
 
+    <?php
     use Doctrine\DBAL\DriverManager;
 
     $conn = DriverManager::getConnection(/**..**/);
     $guid = $conn->fetchColumn('SELECT ' . $conn->getDatabasePlatform()->getGuidExpression());
 
     $conn->insert("my_table", array("id" => $guid, "foo" => "bar"));
+
+In your application you should hide this details in Id-Generation services:
+
+.. code-block:: php
+
+    <?php
+    namespace MyApplication;
+
+    class IdGenerationService
+    {
+        private $conn;
+
+        public function generateCustomerId()
+        {
+            return $this->conn->fetchColumn('SELECT ' .
+                $this->conn->getDatabasePlatform()->getGuidExpression()
+            );
+        }
+    }
 
 A good starting point to read up on GUIDs (vs numerical ids) is this blog post
 `Coding Horror: Primary Keys: IDs vs GUIDs
@@ -118,7 +143,7 @@ There are three important drawbacks to this strategy:
 
 1. Single point of failure
 2. Bottleneck when application is write-heavy
-3. A second independent databse connection is needed to guarantee transaction
+3. A second independent database connection is needed to guarantee transaction
    safety.
 
 If you can live with this drawbacks then you can use table-generation with the
@@ -186,7 +211,7 @@ ShardManager Interface
 ----------------------
 
 The central API of the sharding extension is the ``ShardManager`` interface.
-It contains two different kinds of logic.
+It contains two different groups of functions with regard to sharding.
 
 First, it contains the Shard Selection API. You can pick a shard based on a
 so-called "distribution-value" or reset the connection to the "global" shard,
@@ -228,7 +253,7 @@ This is especially important when using sharding with the ORM. Because the ORM
 uses a single transaction during the flush-operation this means that you can
 only ever use one ``EntityManager`` with data from a single shard.
 
-The second API is the "fan-out" API. This allows you to execute queries against
+The second API is the "fan-out" query API. This allows you to execute queries against
 ALL shards. The order of the results of this operation is undefined, that means
 your query has to return the data in a way that works for the application, or
 you have to sort the data in the application.
@@ -239,14 +264,30 @@ you have to sort the data in the application.
     $sql = "SELECT * FROM customers";
     $rows = $shardManager->queryAll($sql, $params);
 
-Implementations
----------------
+
+Schema Operations: SchemaSynchronizer Interface
+-----------------------------------------------
+
+Schema Operations in a sharding architecture are tricky. You have to perform
+them on all databases instances (shards) at the same time. Also Doctrine
+has problems with this in particular as you cannot generate an SQL file with
+changes on any development machine anymore and apply this on production. The
+required changes depend on the amount of shards.
+
+To allow the Doctrine Schema API operations on a sharding architecture we
+performed a refactored from code inside ORM ``Doctrine\ORM\Tools\SchemaTool``
+class and extracted the code for operations on Schema instances into a new
+``Doctrine\Shards\DBAL\SchemaSynchronizer`` interface.
+
+Every sharding implementation can implement this interface and allow schema
+operations to take part on multiple shards.
 
 SQL Azure Federations
-~~~~~~~~~~~~~~~~~~~~~
+---------------------
 
-Currently Doctrine Shards only ships with an implementation for Microsoft SQL
-Azure. The Azure platform provides a native sharding functionality. This
+Doctrine Shards ships with a custom implementation for Microsoft SQL
+Azure. The Azure platform provides a native sharding functionality. In SQL
+Azure the sharding functionality is called Federations. This
 functionality applies the following restrictions (in line with the ones listed
 above):
 
@@ -267,6 +308,19 @@ FEDERATION`` statement. You don't have to maintain a list of all the shards
 inside your application and more importantly, resizing shards is done
 transparently on the server.
 
+Features of SQL Azure are:
+
+- Central server to log into federations architecture. No need to know all
+  connection details of all shards.
+- Database level operation to split shards, taking away the tediousness of this
+  operation for application developers.
+- A global tablespace that can contain global data to all shards.
+- One or many different federations (this library only supports working with
+  one)
+- Sharded or non-sharded tables inside federations
+- Allows filtering SELECT queries on the database based on the selected
+  sharding key value. This allows to implement sharded Multi-Tenant Apps very easily.
+
 To setup an SQL Azure ShardManager use the following code:
 
 .. code-block:: php
@@ -276,19 +330,19 @@ To setup an SQL Azure ShardManager use the following code:
     use Doctrine\Shards\DBAL\SQLAzure\SQLAzureShardManager;
 
     $conn = DriverManager::getConnection(array(
-        'dbname' => 'my_database',
-        'host' => 'tcp:dbname.windows.net',
-        'user' => 'user@dbname',
+        'dbname'   => 'my_database',
+        'host'     => 'tcp:dbname.windows.net',
+        'user'     => 'user@dbname',
         'password' => 'XXX',
         'sharding' => array(
-            'federationName' => 'my_federation',
-            'distributionKey' => 'customer_id',
+            'federationName'   => 'my_federation',
+            'distributionKey'  => 'customer_id',
+            'distributionType' => 'integer',
         )
     ));
     $shardManager = new SQLAzureShardManager($conn);
 
-Currently you are limited to one federation. Support for multiple federations
-will follow soon.
+Currently you are limited to one federation in your application.
 
 You can inspect all the currently known shards on SQL Azure using the
 ``ShardManager#getShards()`` function:
@@ -297,8 +351,61 @@ You can inspect all the currently known shards on SQL Azure using the
 
     <?php
     foreach ($shardManager->getShards() as $shard) {
-        echo $shard['name'] . " " . $shard['rangeLow'] . " - " . $shard['rangeHigh'];
+        echo $shard['id'] . " " . $shard['rangeLow'] . " - " . $shard['rangeHigh'];
     }
+
+Schema Operations
+~~~~~~~~~~~~~~~~~
+
+Schema Operations on SQL Azure Federations are possible with the
+``SQLAzureSchemaSynchronizer``. You can instantiate this from your code:
+
+.. code-block:: php
+
+    <?php
+    use Doctrine\Shards\DBAL\SQLAzure\SQLAzureSchemaSynchronizer;
+
+    $synchronizer = new SQLAzureSchemaSynchronizer($conn, $shardManager);
+
+You can use the API such as ``createSchema($schema)`` then and it will be
+distributed across all shards. The assumptions are:
+
+- Using ``SchemaSynchronizer#createSchema()`` assumes the database is empty.
+  The federation is created during this operation.
+- Using ``SchemaSynchronizer#updateSchema()`` assumes the database and the
+  federation exists. All shards of the federation are iterated and update is
+  applied to all shards consecutively.
+
+For a schema with tables in the global or federated sub-schema you have to use
+the Schema API to mark tables:
+
+.. code-block:: php
+
+    <?php
+    use Doctrine\DBAL\Schema\Schema;
+
+    $schema = new Schema();
+
+    // no options set, this table will be on the federation root
+    $users = $schema->createTable('Users');
+    //...
+
+    // marked as sharded, but no distribution column given:
+    // non-federated table inside the federation
+    $products = $schema->createTable('Products');
+    $products->addOption('azure.federated', true);
+    //...
+
+    // shared + distribution column:
+    // federated table
+    $customers = $schema->createTable('Customers');
+    $customers->addColumn('CustomerID', 'integer');
+    //...
+    $customers->addOption('azure.federated', true);
+    $customers->addOption('azure.federatedOnColumnName', 'CustomerID');
+
+SQLAzure Filtering
+~~~~~~~~~~~~~~~~~~
 
 SQL Azure comes with a powerful filtering feature, that allows you to
 automatically implement a multi-tenant application for a formerly single-tenant
@@ -322,3 +429,45 @@ To enable filtering you can use the
 of the interface. You can also set a default value for filtering by passing it
 as the "sharding.filteringEnabled" parameter to
 ``DriverManager#getConnection()``.
+
+Generic SQL Sharding Support
+----------------------------
+
+Besides the custom SQL Azure support there is a generic implementation that
+works with all database drivers. It requires to specify all database
+connections and will switch between the different connections under the hood
+when using the ``ShardManager`` API. This is also the biggest drawback of this
+approach, since fan-out queries need to connect to all databases in a single
+request.
+
+See the configuration for a sample sharding connection:
+
+.. code-block:: php
+
+    <?php
+    use Doctrine\DBAL\DriverManager;
+
+    $conn = DriverManager::getConnection(array(
+        'wrapperClass' => 'Doctrine\Shards\DBAL\PoolingShardConnection',
+        'driver'       => 'pdo_sqlite',
+        'global'       => array('memory' => true),
+        'shards'       => array(
+            array('id' => 1, 'memory' => true),
+            array('id' => 2, 'memory' => true),
+        ),
+        'shardChoser' => 'Doctrine\Shards\DBAL\ShardChoser\MultiTenantShardChoser',
+    ));
+
+You have to configure the following options:
+
+- 'wrapperClass' - Selecting the PoolingShardConnection as above.
+- 'global' - An array of database parameters that is used for connecting to the
+  global database.
+- 'shards' - An array of of shard database parameters. You have to specifiy an
+  'id' parameter for each of the shard configurations.
+- 'shardChoser' - Implementation of the
+  ``Doctrine\Shards\DBAL\ShardChoser\ShardChoser`` interface.
+
+The Shard Choser interface maps the distribution value to a shard-id. This
+gives you the freedom to implement your own strategy for sharding the data
+horizontally.
