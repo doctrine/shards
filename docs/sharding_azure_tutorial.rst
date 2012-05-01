@@ -59,6 +59,7 @@ The first thing to start with is setting up Doctrine and the database connection
         'host'     => 'tcp:dbname.windows.net',
         'user'     => 'user@dbname',
         'password' => 'XXX',
+        'driverOptions'  => array('MultipleActiveResultSets' => false),
         'sharding' => array(
             'federationName'   => 'Orders_Federation',
             'distributionKey'  => 'CustId',
