@@ -1,0 +1,6 @@
+{
+    "require": {
+        "doctrine/dbal": "2.2.2",
+        "doctrine/shards": "0.2"
+    }
+}

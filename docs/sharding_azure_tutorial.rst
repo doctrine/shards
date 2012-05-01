@@ -10,7 +10,12 @@ support sharding. Many features for sharding are implemented on the database
 level, which makes it much easier to work with than generic sharding
 implementations.
 
-For this tutorial you need an Azure account.
+For this tutorial you need an Azure account. You don't need to deploy the code
+on Azure, you can run it from your own machine against the remote database.
+
+.. note::
+
+    You can look at the code from the 'examples/sharding' directory.
 
 Install Doctrine
 ----------------
