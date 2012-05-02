@@ -4,7 +4,7 @@ Doctrine Extension to support horizontal sharding in the Doctrine ORM.
 
 ## Idea
 
-Implement sharding inside Doctrine at a level that is unobstrusive to the developer as possible.
+Implement sharding inside Doctrine at a level that is as unobtrusive to the developer as possible.
 
 Problems to tackle:
 
@@ -28,7 +28,7 @@ Version 1: DBAL 2.3 (Multi-Tenant Apps)
 
 Version 2: ORM related (complex):
 
-    4. Id resolving (Pick shard for a new id)
+    4. ID resolving (Pick shard for a new ID)
     5. Query resolving (Pick shards a query should send to)
     6. Shard resolving (Pick shards an ID could be on)
     7. Transactions
@@ -64,11 +64,11 @@ More features are necessary to implement sharding on the PHP level, independent 
 
 ## Primary Use-Cases
 
-1. Multi-Tenent Applications
+1. Multi-Tenant Applications
 
 These are easier to support as you have some value to determine the shard id for the whole request very early on.
 Here also queries can always be limited to a single shard.
 
 2. Scale-Out by some attribute (Round-Robin?)
 
-This strategy requires to access multiple shards in a single request based on the data accessed.
+This strategy requires access to multiple shards in a single request based on the data accessed.
